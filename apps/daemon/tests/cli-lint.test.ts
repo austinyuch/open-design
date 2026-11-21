@@ -10,7 +10,7 @@
 
 import http from 'node:http';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve as pathResolve } from 'node:path';
@@ -18,6 +18,8 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { ArtifactLintFinding } from '@open-design/contracts';
+
+import { lintArtifact, renderFindingsForAgent } from '../src/lint-artifact.js';
 
 const execFileP = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -283,6 +285,24 @@ describe('od lint CLI entrypoint', () => {
     const port = await reserveAndReleasePort();
     const run = await runCli(['lint', cleanFile, '--daemon-url', `http://127.0.0.1:${port}`]);
     expect(run.code).toBe(3);
+  });
+
+  it('fails `--json --fail-on p0` on the low-contrast fixture with the real linter', async () => {
+    // The stub answers with the daemon's own linter, so this exercises the
+    // real low-contrast-text rule end to end through the CLI envelope.
+    stub.setResponder((req) => {
+      const { html } = JSON.parse(req.body) as { html: string };
+      const findings = lintArtifact(html);
+      return { status: 200, body: { findings, agentMessage: renderFindingsForAgent(findings) } };
+    });
+    const fixture = join(__dirname, 'fixtures', 'a11y', 'low-contrast.html');
+    expect(readFileSync(fixture, 'utf8')).toContain('#a3a3a3');
+    const run = await runCli(['lint', fixture, '--json', '--fail-on', 'p0', '--daemon-url', stub.baseUrl]);
+    expect(run.code).toBe(1);
+    const envelope = JSON.parse(run.stdout);
+    expect(envelope.ok).toBe(false);
+    expect(envelope.counts.p0).toBeGreaterThanOrEqual(1);
+    expect(envelope.findings).toContainEqual(expect.objectContaining({ id: 'low-contrast-text', severity: 'P0' }));
   });
 
   it('is discoverable from the root help output', async () => {
