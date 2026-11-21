@@ -1,0 +1,28 @@
+{
+  "schema": "open-design/a2ui-mapping/v1",
+  "a2uiVersion": "1.0",
+  "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+  "components": {
+    "Text": { "class": "", "variants": { "caption": "lead" } },
+    "Image": { "class": "" },
+    "Icon": { "class": "status" },
+    "Video": { "class": "" },
+    "AudioPlayer": { "class": "" },
+    "Row": { "class": "actions" },
+    "Column": { "class": "stack" },
+    "List": { "class": "stack" },
+    "Card": { "class": "panel" },
+    "Tabs": { "class": "panel" },
+    "Modal": { "class": "" },
+    "Divider": { "class": "" },
+    "Button": {
+      "class": "btn btn-secondary",
+      "variants": { "primary": "btn btn-primary", "borderless": "btn" }
+    },
+    "TextField": { "class": "field" },
+    "CheckBox": { "class": "field" },
+    "ChoicePicker": { "class": "field" },
+    "Slider": { "class": "field" },
+    "DateTimeInput": { "class": "field" }
+  }
+}

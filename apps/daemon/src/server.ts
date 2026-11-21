@@ -877,6 +877,7 @@ import {
 } from './live-artifacts/http-helpers.js';
 import { registerConnectorRoutes } from './connectors/routes.js';
 import { registerActiveContextRoutes } from './routes/active-context.js';
+import { registerA2uiRoutes } from './routes/a2ui.js';
 import { registerAutomationRoutes } from './routes/automation.js';
 import { registerAttributionRoutes } from './routes/attribution.js';
 import { registerDaemonRoutes } from './routes/daemon.js';
@@ -9843,6 +9844,10 @@ export async function startServer({
     paths: pathDeps,
     node: nodeDeps,
     artifacts: artifactDeps,
+  });
+  registerA2uiRoutes(app, {
+    designSystemsRoot: DESIGN_SYSTEMS_DIR,
+    userDesignSystemsRoot: USER_DESIGN_SYSTEMS_DIR,
   });
   registerLiveArtifactRoutes(app, {
     db,

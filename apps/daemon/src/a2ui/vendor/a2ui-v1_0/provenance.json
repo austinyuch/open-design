@@ -1,0 +1,38 @@
+{
+  "schema": "open-design/vendored-provenance/v1",
+  "repository": "https://github.com/a2ui-project/a2ui",
+  "pinnedCommit": "172cf31e1acbce31c4e60d82b2edbd923b279dd8",
+  "a2uiVersion": "1.0",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "use": "Data only. Read by apps/daemon/src/a2ui/ for offline JSON Schema validation of A2UI 1.0 message streams. Never executed; the $id, $ref and $schema URLs are identifiers and are never fetched.",
+  "files": [
+    {
+      "upstreamPath": "LICENSE",
+      "localPath": "LICENSE",
+      "sha256": "8c8b5b632d56c4c1658296963c693db5396772a33caaddb9a22593c4155c437a"
+    },
+    {
+      "upstreamPath": "specification/v1_0/json/agent_to_renderer.json",
+      "localPath": "specification/v1_0/json/agent_to_renderer.json",
+      "sha256": "2f575f783fdda0e4d175fe5d331661655e4a4901613262322792dae7e823761d"
+    },
+    {
+      "upstreamPath": "specification/v1_0/json/common_types.json",
+      "localPath": "specification/v1_0/json/common_types.json",
+      "sha256": "c4e78305be1de73eecb37f8179ba169730250611703683af291b18135a6430dc"
+    },
+    {
+      "upstreamPath": "catalogs/basic/v1/catalog.json",
+      "localPath": "catalogs/basic/v1/catalog.json",
+      "sha256": "d4ce11f8fff2da8d5fd0b2793db524f6aa7eef541eefb6fe2b71f0efc17cbfa9"
+    }
+  ],
+  "testFixtures": [
+    {
+      "upstreamPath": "catalogs/basic/v1/examples/login-form.json",
+      "localPath": "apps/daemon/tests/fixtures/a2ui/login-form.json",
+      "sha256": "99663889081957031c6f1814d7c52132a17451253b92488392cecbc41d5d5e1b"
+    }
+  ]
+}

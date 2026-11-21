@@ -22,7 +22,7 @@ import { redactSecrets } from './connectionTest.js';
 import { SidecarFactory } from '@open-design/sidecar';
 import { APP_KEYS, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
 import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS, mediaFailureNextStep, parseApiFailureDetail } from '@open-design/contracts';
-import type { ArtifactLintFinding, LintArtifactCliResultEnvelope, LintArtifactResponse, LintFailOn } from '@open-design/contracts';
+import type { A2uiImportResult, ArtifactLintFinding, LintArtifactCliResultEnvelope, LintArtifactResponse, LintFailOn } from '@open-design/contracts';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
 import {
@@ -445,6 +445,7 @@ const SUBCOMMAND_MAP = {
   diagnostics: runDiagnostics,
   export: runExport,
   lint: runLint,
+  import: runImport,
   status: runStatus,
   version: runVersion,
   'whats-new': runWhatsNew,
@@ -1037,6 +1038,111 @@ async function runLint(args) {
   if (failed) process.exitCode = 1;
 }
 
+const IMPORT_STRING_FLAGS = new Set(['daemon-url', 'design-system', 'file', 'out']);
+const IMPORT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+
+function printImportHelp() {
+  console.log(`Usage:
+  od import a2ui <file|-> --design-system <id> [options]
+
+Import an A2UI 1.0 message stream (createSurface, updateComponents,
+updateDataModel, deleteSurface; JSON array or JSON Lines) as a
+design-system-styled HTML artifact. The stream is validated against the
+pinned A2UI 1.0 JSON Schemas; unknown catalogs or components fail with typed
+error codes and are never guessed. The design system must declare an
+a2ui.mapping.json. Runs without model/agent calls.
+
+Exit codes: 0 imported · 1 typed import errors · 2 usage · 3 daemon unreachable.
+
+Options:
+  --design-system <id>  Design system whose a2ui.mapping.json, tokens and
+                        component styles render the stream (required)
+  --file <p>            Input path (alternative to the positional; \`-\` = stdin)
+  --out <p>             Write the HTML to a file instead of stdout
+  --json                Print the machine-readable result (html, surfaces,
+                        warnings or typed errors)
+  --daemon-url <url>    Override daemon URL
+
+Examples:
+  od import a2ui ui.a2ui.jsonl --design-system agentic --out ui.html
+  od import a2ui - --design-system agentic --json < ui.a2ui.json`);
+}
+
+// CLI half of POST /api/a2ui/import.
+async function runImport(args) {
+  const sub = args.find((a) => !a.startsWith('-'));
+  if (!sub || sub === 'help' || args.includes('--help') || args.includes('-h')) {
+    printImportHelp();
+    process.exit(sub ? 0 : 2);
+  }
+  if (sub !== 'a2ui') {
+    console.error(`unknown import format: od import ${sub} (supported: a2ui)`);
+    printImportHelp();
+    process.exit(2);
+  }
+  const rest = args.filter((_a, i) => i !== args.indexOf(sub));
+  let flags;
+  try {
+    flags = parseFlags(rest, { string: IMPORT_STRING_FLAGS, boolean: IMPORT_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const file = flags.file || positionalArgs(rest, IMPORT_STRING_FLAGS)[0];
+  const designSystemId = flags['design-system'];
+  if (!file || !designSystemId) {
+    console.error(!file ? 'missing input: od import a2ui <file|->' : 'missing --design-system <id>');
+    printImportHelp();
+    process.exit(2);
+  }
+  let stream;
+  try {
+    if (file === '-') {
+      const chunks = [];
+      for await (const chunk of process.stdin) chunks.push(chunk);
+      stream = Buffer.concat(chunks).toString('utf8');
+    } else {
+      const { readFile } = await import('node:fs/promises');
+      stream = await readFile(file, 'utf8');
+    }
+  } catch (err) {
+    console.error(`cannot read ${file}: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(2);
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/a2ui/import`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ stream, designSystemId }),
+    });
+  } catch (err) {
+    surfaceFetchError(err, base);
+    process.exit(3);
+  }
+  if (!resp.ok && resp.status !== 422) return structuredHttpFailure(resp);
+  const result = (await resp.json()) as A2uiImportResult;
+  if (result.ok && flags.out) {
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(flags.out, result.html);
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  } else if (!result.ok) {
+    for (const e of result.errors) console.error(`[${e.code}] ${e.path}: ${e.message}`);
+  } else {
+    for (const w of result.warnings) console.error(`warning [${w.code}] ${w.path}: ${w.message}`);
+    if (flags.out) {
+      const ids = result.surfaces.reduce((n, sf) => n + sf.componentIds.length, 0);
+      console.log(`wrote ${flags.out} (${result.surfaces.length} surface(s), ${ids} component(s), design system ${result.designSystemId})`);
+    } else {
+      process.stdout.write(result.html);
+    }
+  }
+  if (!result.ok) process.exitCode = 1;
+}
+
 if (argv[0] === 'mcp' && argv[1] === 'live-artifacts') {
   try {
     const { exitCode } = await runLiveArtifactsMcpServer();
@@ -1254,6 +1360,11 @@ function printRootHelp() {
       Run the daemon's anti-slop artifact linter against an HTML file or stdin
       (no model/agent calls; headless-safe). Exits 1 when findings meet the
       --fail-on threshold, so it can gate cron/CI render pipelines.
+
+  od import a2ui <file|-> --design-system <id> [--out <path>] [--json]
+      Import an A2UI 1.0 message stream (JSON array or JSONL) as HTML styled
+      by the design system's declared a2ui.mapping.json. Validated against the
+      pinned A2UI 1.0 schemas; unknown components fail with typed errors.
 
   "$OD_NODE_BIN" "$OD_BIN" tools ...
       Recommended agent-runtime form; avoids relying on user PATH for od or node.

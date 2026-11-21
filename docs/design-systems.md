@@ -67,9 +67,14 @@ assets/                       optional static assets
 fonts/                        optional webfonts
 preview/                      indexed preview pages
 source/                       importer evidence and token reports
+a2ui.mapping.json             optional A2UI 1.0 component → class mapping
 ```
 
-Declare these through the corresponding manifest fields (`usage`,
+`a2ui.mapping.json` is not a manifest field: the A2UI importer looks for it
+by name, and a package without one cannot render A2UI streams. Its format and
+the supported A2UI version are documented in [`a2ui-import.md`](a2ui-import.md).
+
+Declare the other files through the corresponding manifest fields (`usage`,
 `files.components`, `componentsManifest`, `files.designTokens`,
 `files.tailwind`, `assetsDir`, `fonts`, `preview`, and `sourceFiles`). Do not add
 undeclared alternate canonical files.
@@ -197,6 +202,12 @@ easy to miss.
 - Do not claim conformance without checking every foreground/background pair
   used by the fixture.
 - Scope reduced-motion overrides to the elements and properties that animate.
+- `od lint` checks the statically resolvable part of this: `low-contrast-text`
+  (SC 1.4.3) and `low-contrast-ui` (SC 1.4.11) are P0, as is
+  `missing-accessible-name`; `target-size-min` (SC 2.5.8, 24×24 CSS px) is P1.
+  Colours it cannot resolve (`color-mix()`, `currentColor`, gradients,
+  translucent backgrounds, undefined tokens) are reported as
+  `contrast-unresolved` (P1) rather than passed.
 
 ## 7. Motion and interaction
 
