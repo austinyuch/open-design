@@ -19,6 +19,8 @@
 
 import type { ArtifactLintFinding, ArtifactLintSeverity } from '@open-design/contracts';
 
+import { lintAccessibility } from './lint-a11y.js';
+
 // The shared wire contract in @open-design/contracts is the authority for
 // the finding shape; the legacy names alias it so existing importers keep
 // compiling while incompatible producer changes now fail compilation here
@@ -505,6 +507,12 @@ export function lintArtifact(rawHtml: unknown): LintFinding[] {
       }
     }
   }
+
+  // ── Accessibility (WCAG 2.2): contrast, accessible name, target size ─
+  // Appended after the anti-slop rules so their ids, severities and order
+  // are unchanged. Tokens resolve through the same per-theme maps the
+  // tracking rule uses, so both passes agree on what a token renders as.
+  out.push(...lintAccessibility(html, buildResolvedThemes(tokenScopes), resolveCssVars));
 
   return out;
 }
