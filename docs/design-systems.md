@@ -197,6 +197,12 @@ easy to miss.
 - Do not claim conformance without checking every foreground/background pair
   used by the fixture.
 - Scope reduced-motion overrides to the elements and properties that animate.
+- `od lint` checks the statically resolvable part of this: `low-contrast-text`
+  (SC 1.4.3) and `low-contrast-ui` (SC 1.4.11) are P0, as is
+  `missing-accessible-name`; `target-size-min` (SC 2.5.8, 24×24 CSS px) is P1.
+  Colours it cannot resolve (`color-mix()`, `currentColor`, gradients,
+  translucent backgrounds, undefined tokens) are reported as
+  `contrast-unresolved` (P1) rather than passed.
 
 ## 7. Motion and interaction
 
