@@ -16,7 +16,12 @@ import {
   renameWorkspaceArtifactPath,
 } from '../../chat-artifacts/store.js';
 import type { Express, Request, Response } from 'express';
-import type { LintArtifactRequest, LintArtifactResponse } from '@open-design/contracts';
+import {
+  DEFAULT_A11Y_COMPLIANCE_LEVEL,
+  parseA11yComplianceLevel,
+  type LintArtifactRequest,
+  type LintArtifactResponse,
+} from '@open-design/contracts';
 import {
   PREVIEW_OBSERVABILITY_BRIDGE_MARKER,
   buildPreviewBaseHrefBridge,
@@ -5905,9 +5910,15 @@ export function registerProjectArtifactRoutes(app: Express, ctx: RegisterProject
   // chat layer can splice them into a system reminder for the agent.
   app.post('/api/artifacts/save', (req, res) => {
     try {
-      const { identifier, title, html } = req.body || {};
+      const { identifier, title, html, a11yLevel } = req.body || {};
       if (typeof html !== 'string' || html.length === 0) {
         return res.status(400).json({ error: 'html required' });
+      }
+      const parsedLevel = parseA11yComplianceLevel(a11yLevel, {
+        defaultLevel: DEFAULT_A11Y_COMPLIANCE_LEVEL,
+      });
+      if (!parsedLevel.ok) {
+        return res.status(400).json({ error: parsedLevel.error });
       }
       const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
       const slug = sanitizeSlug(identifier || title || 'artifact');
@@ -5915,14 +5926,16 @@ export function registerProjectArtifactRoutes(app: Express, ctx: RegisterProject
       fs.mkdirSync(dir, { recursive: true });
       const file = path.join(dir, 'index.html');
       fs.writeFileSync(file, html, 'utf8');
-      const findings = lintArtifact(html);
+      const findings = lintArtifact(html, { a11yLevel: parsedLevel.value });
       res.json({
         path: file,
         url: `/artifacts/${path.basename(dir)}/index.html`,
+        a11yLevel: parsedLevel.value,
         lint: findings,
       });
     } catch (err: any) {
-      res.status(500).json({ error: String(err) });
+      console.error('POST /api/artifacts/save failed:', err);
+      res.status(500).json({ error: 'internal error' });
     }
   });
 
@@ -5933,18 +5946,26 @@ export function registerProjectArtifactRoutes(app: Express, ctx: RegisterProject
   // change that breaks the wire shape fails compilation here.
   app.post('/api/artifacts/lint', (req, res) => {
     try {
-      const { html } = (req.body ?? {}) as Partial<LintArtifactRequest>;
+      const { html, a11yLevel } = (req.body ?? {}) as Partial<LintArtifactRequest>;
       if (typeof html !== 'string' || html.length === 0) {
         return res.status(400).json({ error: 'html required' });
       }
-      const findings = lintArtifact(html);
+      const parsedLevel = parseA11yComplianceLevel(a11yLevel, {
+        defaultLevel: DEFAULT_A11Y_COMPLIANCE_LEVEL,
+      });
+      if (!parsedLevel.ok) {
+        return res.status(400).json({ error: parsedLevel.error });
+      }
+      const findings = lintArtifact(html, { a11yLevel: parsedLevel.value });
       const payload: LintArtifactResponse = {
         findings,
         agentMessage: renderFindingsForAgent(findings),
+        a11yLevel: parsedLevel.value,
       };
       res.json(payload);
     } catch (err: any) {
-      res.status(500).json({ error: String(err) });
+      console.error('POST /api/artifacts/lint failed:', err);
+      res.status(500).json({ error: 'internal error' });
     }
   });
 

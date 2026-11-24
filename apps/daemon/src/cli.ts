@@ -21,8 +21,24 @@ import { BYOK_OPENCODE_AGENT_ID } from './runtimes/byok-opencode.js';
 import { redactSecrets } from './connectionTest.js';
 import { SidecarFactory } from '@open-design/sidecar';
 import { APP_KEYS, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
-import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS, mediaFailureNextStep, parseApiFailureDetail } from '@open-design/contracts';
-import type { ArtifactLintFinding, LintArtifactCliResultEnvelope, LintArtifactResponse, LintFailOn } from '@open-design/contracts';
+import {
+  A11Y_COMPLIANCE_LEVELS,
+  DEFAULT_A11Y_COMPLIANCE_LEVEL,
+  EXPORT_FORMATS,
+  EXPORT_IMAGE_FORMATS,
+  formatArtifactLintCompliance,
+  mediaFailureNextStep,
+  parseA11yComplianceLevel,
+  parseApiFailureDetail,
+} from '@open-design/contracts';
+import type {
+  A11yComplianceLevel,
+  ArtifactLintFinding,
+  LintArtifactCliResultEnvelope,
+  LintArtifactRequest,
+  LintArtifactResponse,
+  LintFailOn,
+} from '@open-design/contracts';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
 import {
@@ -922,7 +938,7 @@ async function runExport(args) {
   console.log(`wrote ${out} (${buffer.length} bytes)`);
 }
 
-const LINT_STRING_FLAGS = new Set(['daemon-url', 'file', 'html-file', 'fail-on']);
+const LINT_STRING_FLAGS = new Set(['daemon-url', 'file', 'html-file', 'fail-on', 'a11y-level']);
 const LINT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'agent-message']);
 const LINT_FAIL_ON_VALUES = ['p0', 'p1', 'p2', 'none'];
 
@@ -940,6 +956,7 @@ Exit codes: 0 clean at threshold · 1 findings at/above --fail-on ·
 Options:
   --file, --html-file <p>  Input path (alternative to the positional; \`-\` = stdin)
   --fail-on <sev>          p0 | p1 | p2 | none — exit 1 threshold (default p0)
+  --a11y-level <tier>      ${A11Y_COMPLIANCE_LEVELS.join(' | ')} (default ${DEFAULT_A11Y_COMPLIANCE_LEVEL})
   --agent-message          Also print the <artifact-lint> block for agent splicing
   --json                   Print a machine-readable result envelope
   --daemon-url <url>       Override daemon URL
@@ -947,7 +964,7 @@ Options:
 Examples:
   od lint artifact.html
   od lint - < artifact.html --json
-  od lint report.html --fail-on p1 --agent-message`);
+  od lint report.html --a11y-level wcag22-aaa --fail-on p1 --agent-message`);
 }
 
 // CLI half of POST /api/artifacts/lint. The endpoint has been live since the
@@ -971,11 +988,18 @@ async function runLint(args) {
     printLintHelp();
     process.exit(2);
   }
-  const failOn = (flags['fail-on'] || 'p0') as LintFailOn;
+  const rawFailOn = flags['fail-on'];
+  const failOn = (rawFailOn !== undefined ? rawFailOn : 'p0') as LintFailOn;
   if (!LINT_FAIL_ON_VALUES.includes(failOn)) {
-    console.error(`invalid --fail-on: ${failOn} (expected ${LINT_FAIL_ON_VALUES.join(' | ')})`);
+    console.error(`invalid --fail-on (expected ${LINT_FAIL_ON_VALUES.join(' | ')})`);
     process.exit(2);
   }
+  const parsedLevel = parseA11yComplianceLevel(flags['a11y-level'], { label: '--a11y-level' });
+  if (!parsedLevel.ok) {
+    console.error(parsedLevel.error);
+    process.exit(2);
+  }
+  const requestedA11yLevel: A11yComplianceLevel | undefined = parsedLevel.value;
   let html;
   try {
     if (file === '-') {
@@ -995,19 +1019,22 @@ async function runLint(args) {
     process.exit(2);
   }
   const base = await cliDaemonBaseUrl(flags);
+  const requestBody: LintArtifactRequest =
+    requestedA11yLevel !== undefined ? { html, a11yLevel: requestedA11yLevel } : { html };
   let resp;
   try {
     resp = await fetch(`${base}/api/artifacts/lint`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ html }),
+      body: JSON.stringify(requestBody),
     });
   } catch (err) {
     surfaceFetchError(err, base);
     process.exit(3);
   }
   if (!resp.ok) return structuredHttpFailure(resp);
-  const { findings, agentMessage } = (await resp.json()) as LintArtifactResponse;
+  const { findings, agentMessage, a11yLevel: responseA11yLevel } = (await resp.json()) as LintArtifactResponse;
+  const effectiveA11yLevel = responseA11yLevel ?? requestedA11yLevel ?? DEFAULT_A11Y_COMPLIANCE_LEVEL;
   const counts = { p0: 0, p1: 0, p2: 0 };
   for (const f of findings) {
     if (f.severity === 'P0') counts.p0 += 1;
@@ -1021,16 +1048,17 @@ async function runLint(args) {
     : false;
   if (flags.json) {
     const envelope: LintArtifactCliResultEnvelope = {
-      ok: !failed, file, failOn, counts, findings, agentMessage,
+      ok: !failed, file, failOn, a11yLevel: effectiveA11yLevel, counts, findings, agentMessage,
     };
     process.stdout.write(JSON.stringify(envelope, null, 2) + '\n');
   } else {
     for (const f of findings as ArtifactLintFinding[]) {
-      console.log(`[${f.severity}] ${f.id} — ${f.message}`);
+      const provenance = f.compliance ? ` [${formatArtifactLintCompliance(f.compliance)}]` : '';
+      console.log(`[${f.severity}] ${f.id}${provenance} — ${f.message}`);
       if (f.snippet) console.log(`      ${f.snippet}`);
       console.log(`      fix: ${f.fix}`);
     }
-    const summary = `${findings.length} finding${findings.length === 1 ? '' : 's'} (P0 ${counts.p0} · P1 ${counts.p1} · P2 ${counts.p2})`;
+    const summary = `${findings.length} finding${findings.length === 1 ? '' : 's'} (P0 ${counts.p0} · P1 ${counts.p1} · P2 ${counts.p2} · a11y: ${effectiveA11yLevel})`;
     console.log(findings.length ? summary : `clean — ${summary}`);
     if (flags['agent-message'] && agentMessage) console.log(`\n${agentMessage}`);
   }
@@ -1250,7 +1278,7 @@ function printRootHelp() {
       (no model/agent calls). Mirrors the web Download menu; rasterization uses
       the desktop runtime's bundled Chromium.
 
-  od lint <file.html|-> [--fail-on <p0|p1|p2|none>] [--json]
+  od lint <file.html|-> [--fail-on <p0|p1|p2|none>] [--a11y-level <tier>] [--json]
       Run the daemon's anti-slop artifact linter against an HTML file or stdin
       (no model/agent calls; headless-safe). Exits 1 when findings meet the
       --fail-on threshold, so it can gate cron/CI render pipelines.

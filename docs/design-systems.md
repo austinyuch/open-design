@@ -190,6 +190,8 @@ easy to miss.
 
 ## 6. Accessibility
 
+Baseline authoring expectations and static enforcement follow the [W3C WCAG 2.2 Recommendation](https://www.w3.org/TR/WCAG22/):
+
 - Verify normal text at 4.5:1 contrast and large text at 3:1 against the actual
   paired background.
 - Give every interactive control a visible `:focus-visible` treatment.
@@ -197,6 +199,55 @@ easy to miss.
 - Do not claim conformance without checking every foreground/background pair
   used by the fixture.
 - Scope reduced-motion overrides to the elements and properties that animate.
+- `od lint` checks the statically resolvable subset of WCAG 2.2 via declarative
+  compliance profiles in `@open-design/contracts` (`A11Y_COMPLIANCE_PROFILES` on
+  frozen `A11Y_COMPLIANCE_LEVELS`): `wcag-a`, `wcag20-aa`, `wcag21-aa`,
+  `wcag22-aa` (default), `wcag22-aaa`, and `off`. Pass `--a11y-level <tier>` to
+  `od lint`, `a11yLevel` in the request body of `POST /api/artifacts/lint` /
+  `POST /api/artifacts/save`, or field-level partial `a11yProfile` overrides to
+  `lintArtifact()` to tune enabled rule fields (while re-enabling a `null` rule
+  slot requires a complete rule spec) without changing linter logic.
+- Wire DTOs preserve the structured 3-field provenance shape
+  `compliance: { standard, sc, level }` on every tiered finding (`contrast-unresolved`
+  omits `compliance`). Consumers needing authoritative W3C anchor URLs can call
+  `formatWcagCriterionUrl(finding.compliance)` from `@open-design/contracts`
+  (returns `https://www.w3.org/TR/WCAG22/#<criterion-slug>` or `null` for
+  unrecognized/non-object inputs). CLI plain-text output and `<artifact-lint>`
+  agent blocks render `[WCAG X.Y SC Z, Level]`, and CLI `--json` / HTTP `/lint`
+  and `/save` responses disclose the active `a11yLevel`.
+- `low-contrast-ui` defaults to P1 under WCAG 2.1/2.2 AA and AAA presets (`wcag20-aa`
+  omits `uiContrast` by default) so existing decorative hairline `--border` tokens
+  used for cards and dividers surface as non-blocking warnings until upgraded (callers
+  can promote `uiContrast` to `P0` via `a11yProfile` overrides). For compliant form
+  controls (`input`, `select`, `textarea`), bind a ≥ 3:1 high-contrast token (such as
+  `--muted`, `--fg-2`, or `--fg`), an explicit ≥ 3:1 control border colour, a
+  crisp outer ring `box-shadow`, or a ≥ 3:1 fill rather than reusing a hairline
+  `--border` token.
+
+### Static Linter Matrix (10 Rule Slots)
+
+| Rule ID | Slot | Active Tiers | Severity | Thresholds | W3C WCAG 2.2 Anchor | Static Coverage & Limits |
+|---|---|---|---|---|---|---|
+| `low-contrast-text` | `textContrast` | `wcag20-aa`..`wcag22-aaa` | P0 | `4.5:1` / `3:1` AA; `7:1` / `4.5:1` AAA (`24px`, bold `18.66px`) | [SC 1.4.3](https://www.w3.org/TR/WCAG22/#contrast-minimum) / [SC 1.4.6](https://www.w3.org/TR/WCAG22/#contrast-enhanced) | Evaluates rules pairing foreground `color` and an opaque background across theme scopes; inherited single-sided rules are skipped. |
+| `low-contrast-ui` | `uiContrast` | `wcag21-aa`..`wcag22-aaa` | P1 | `3:1` vs page backdrop | [SC 1.4.11](https://www.w3.org/TR/WCAG22/#non-text-contrast) | Evaluates boundary form controls (`input` except hidden/button/submit/reset/image, `select`, `textarea`, checkbox/switch/radio/textbox/combobox/slider roles) over `pageBackdrop`. |
+| `missing-accessible-name` | `accessibleName` | `wcag-a`..`wcag22-aaa` | P0 | Non-empty name | [SC 4.1.2](https://www.w3.org/TR/WCAG22/#name-role-value) | Linearly scans buttons, links (`href`), 8 ARIA widget roles (`button`, `link`, `checkbox`, `switch`, `tab`, `menuitem`, `radio`, `option` — excluding `textbox`, `combobox`, and `slider`), and native form fields (`input` except hidden/submit/reset/button-with-value/image-with-alt, `select`, `textarea`) for text, `<img alt>`, `aria-label`, resolvable `aria-labelledby`, `title`, or `<label>`. |
+| `target-size-min` | `targetSize` | `wcag22-aa`..`wcag22-aaa` | P1 | `24×24` CSS px AA; `44×44` CSS px AAA | [SC 2.5.8](https://www.w3.org/TR/WCAG22/#target-size-minimum) / [SC 2.5.5](https://www.w3.org/TR/WCAG22/#target-size-enhanced) | Checks static `width`/`height` + `min-*` (`px`/`rem`/`pt`); skips pseudo-elements; cannot compute rendered boxes or `2.5.8` spacing exceptions. |
+| `contrast-unresolved` | `unresolvedContrast` | `wcag20-aa`..`wcag22-aaa` | P1 | — | — | Surfaces unresolvable `color-mix()`, `currentColor`, gradients, translucent backgrounds behind text, or undefined tokens so ambiguity never silently passes (`compliance` omitted). |
+| `missing-img-alt` | `imgAlt` | `wcag-a`..`wcag22-aaa` | P0 | Non-whitespace `alt` or explicit decorative / ARIA marking | [SC 1.1.1](https://www.w3.org/TR/WCAG22/#non-text-content) | Checks HTML `<img>` elements (quote-aware, excluding comments/`<template>`/raw-text/`<svg>`); exempts `alt=""`, `role="presentation"\|"none"`, `aria-hidden="true"`, valid `aria-label`/`aria-labelledby`. `<input type="image">` stays under `missing-accessible-name`; `<svg role="img">` and CSS `background-image` are unchecked here. |
+| `missing-page-title` | `pageTitle` | `wcag-a`..`wcag22-aaa` | P1 | Non-empty `<title>` in `<head>` (or under `<html>`) | [SC 2.4.2](https://www.w3.org/TR/WCAG22/#page-titled) | **Fragment-safe**: stays quiet on partial artifacts without `<html>`/`<head>` (e.g. `<!doctype html><main>...</main>`). Ignores `<svg><title>` subtrees. |
+| `missing-html-lang` | `htmlLang` | `wcag-a`..`wcag22-aaa` | P1 | Non-whitespace `lang` on `<html>` | [SC 3.1.1](https://www.w3.org/TR/WCAG22/#language-of-page) | **Fragment-safe**: checks only when a root `<html>` tag exists (`<!doctype html><main>...</main>` and `<head>`-only snippets stay quiet); verifies presence, not BCP 47 subtag validity. |
+| `focus-outline-suppressed` | `focusOutline` | `wcag20-aa`..`wcag22-aaa` | P0 | Visible `:focus` / `:focus-visible` indicator or paired `:focus:not(:focus-visible)` | [SC 2.4.7](https://www.w3.org/TR/WCAG22/#focus-visible) | Checks focus pseudo-class rules (`:not()`-aware; ignores `:focus-within`, pseudo-elements, `@keyframes`, and non-pseudo base rules); accepts visible border/background/text-decoration/non-zero shadow, and treats unexpanded external `var(--focus-ring)` as external tokens without false-positive P0 (while flagging `:root { --focus-ring: none }` and unpaired `:focus:not(:focus-visible)`). |
+| `low-focus-appearance` | `focusAppearance` | `wcag22-aaa` only | P1 | `≥ 2px` width/spread and `≥ 3:1` vs `pageBackdrop` | [SC 2.4.13](https://www.w3.org/TR/WCAG22/#focus-appearance) | Static perimeter-width & contrast proxy against `pageBackdrop` (supports Forced-Colors outer `box-shadow` rings when `outline` is transparent/suppressed; skips `outline: auto` / `currentColor` / dark-mode unknown backdrops with zero `contrast-unresolved`). **Heads-up**: low-alpha `--focus-ring` shadows that pass `2.4.7` often fall below `3:1` under `wcag22-aaa`. |
+
+### Criteria Requiring Browser, DOM, or Interactive Verification (Out of Static Scope)
+
+Static HTML/CSS linting cannot measure live layout, scroll occlusion, pointer gestures, or multi-screen flows. Verify these WCAG 2.2 criteria separately in browser/interactive reviews:
+
+- **SC 2.4.11 / 2.4.12** (*Focus Not Obscured — Minimum / Enhanced*): sticky headers, drawers, toasts, and overlays obscuring focused elements depend on runtime bounding rects and scroll position.
+- **SC 2.5.7** (*Dragging Movements*): single-pointer alternatives to drag-and-drop interactions require DOM event & behavior testing.
+- **SC 3.2.6** (*Consistent Help*): cross-page relative placement of help mechanisms spans multi-route navigation.
+- **SC 3.3.7 / 3.3.8 / 3.3.9** (*Redundant Entry*, *Accessible Authentication — Minimum / Enhanced*): multi-step form state, paste-friendly credential inputs, and cognitive function test alternatives depend on runtime application flows.
+- **SC 2.5.8 target spacing exceptions** (*24px spacing circles*) and **SC 1.3.1 / keyboard tab order** (*DOM nesting, landmark semantics, runtime focus order*): cannot be inferred from isolated CSS declarations alone.
 
 ## 7. Motion and interaction
 
