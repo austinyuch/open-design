@@ -5,6 +5,8 @@ import {
   findRealTagEnd,
   findRealTagOffset,
   HTML_TAG_PATTERNS,
+  scanTag,
+  skipForeignContent,
 } from '../src/runtime/html-injection-points';
 
 // Unit coverage lives here, parser-free, so contracts keeps its dependency-less
@@ -269,5 +271,35 @@ describe('HTML_TAG_PATTERNS', () => {
     const html = '<!doctype html><html><head><base href="/x/"></head><body></body></html>';
 
     expect(findRealTagOffset(html, HTML_TAG_PATTERNS.baseOpen)).toBe(html.indexOf('<base '));
+  });
+});
+
+describe('scanTag', () => {
+  it('captures quoted `>`, valueless attrs, whitespace values, and self-closing solidus accurately', () => {
+    const html = '<img title="a > b" data-note="alt=none" alt="   " role="none" />';
+    const scanned = scanTag(html, '<img'.length);
+    expect(scanned.end).toBe(html.lastIndexOf('>'));
+    expect(scanned.selfClosing).toBe(true);
+    expect(scanned.attrs.get('title')).toBe('a > b');
+    expect(scanned.attrs.get('data-note')).toBe('alt=none');
+    expect(scanned.attrs.get('alt')).toBe('   ');
+    expect(scanned.attrs.get('role')).toBe('none');
+
+    const valueless = '<img src="decor.png" alt/>';
+    const scannedValueless = scanTag(valueless, '<img'.length);
+    expect(scannedValueless.selfClosing).toBe(true);
+    expect(scannedValueless.attrs.has('alt')).toBe(true);
+    expect(scannedValueless.attrs.get('alt')).toBe('');
+  });
+});
+
+describe('skipForeignContent', () => {
+  it('handles deep nesting and many unmatched closing tags linearly without quadratic backtracking', () => {
+    const html = `<svg>${'<g>'.repeat(8_000)}${'</x>'.repeat(8_000)}${'</g>'.repeat(8_000)}</svg>`;
+    const lower = html.toLowerCase();
+    const start = '<svg>'.length;
+    const end = skipForeignContent(html, lower, 'svg', start);
+
+    expect(end).toBe(html.length);
   });
 });

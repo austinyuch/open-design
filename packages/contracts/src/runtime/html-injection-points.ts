@@ -68,7 +68,7 @@ function asciiLower(value: string): string {
   return value.replace(/[A-Z]/g, (c) => c.toLowerCase());
 }
 
-function endOfComment(html: string, from: number): number {
+export function endOfComment(html: string, from: number): number {
   let i = from + 4;
   if (html.startsWith('>', i)) return i + 1;
   if (html.startsWith('->', i)) return i + 2;
@@ -99,13 +99,13 @@ function endOfComment(html: string, from: number): number {
  * `from` is the offset just past the tag name. `end` is the offset of the `>`
  * that closes the tag, or -1 if the tag is unterminated.
  */
-interface ScannedTag {
+export interface ScannedTag {
   end: number;
   selfClosing: boolean;
   attrs: Map<string, string>;
 }
 
-function scanTag(html: string, from: number): ScannedTag {
+export function scanTag(html: string, from: number): ScannedTag {
   const attrs = new Map<string, string>();
   const unterminated: ScannedTag = { end: -1, selfClosing: false, attrs };
   let i = from;
@@ -287,7 +287,7 @@ function findScriptClose(lowerHtml: string, from: number): number {
  * `</template>` inside a nested script string is content, and counting it
  * would end the template early and drop the scan back into author text.
  */
-function skipTemplateContent(html: string, lowerHtml: string, from: number): number {
+export function skipTemplateContent(html: string, lowerHtml: string, from: number): number {
   const tagOpen = /<(\/?)([a-z][^\t\n\f\r \/>]*)/iy;
   // One insertion-mode state per open template, and the stack is the depth. A
   // nested template's contents are processed through the template rules, which
@@ -553,7 +553,7 @@ function foreignChildNamespace(
  * but a `<math>` beneath that foreignObject re-enters MathML, and its children
  * are foreign again. A counter cannot express that.
  */
-function skipForeignContent(html: string, lowerHtml: string, rootName: string, from: number): number {
+export function skipForeignContent(html: string, lowerHtml: string, rootName: string, from: number): number {
   const tagOpen = /<(\/?)([a-z][^\t\n\f\r \/>]*)/iy;
   // The stack is the element's whole lifetime — there is no parallel counter.
   // A name counter cannot survive an unwind: in `<svg><foreignObject><svg>` the
@@ -567,6 +567,17 @@ function skipForeignContent(html: string, lowerHtml: string, rootName: string, f
   const nsStack: { name: string; childNs: string; mathmlText: boolean }[] = [
     { name: rootName, childNs: rootName, mathmlText: false },
   ];
+  const stackTagCounts = new Map<string, number>([[rootName, 1]]);
+  const popFrame = (): void => {
+    const popped = nsStack.pop();
+    if (!popped) return;
+    const count = stackTagCounts.get(popped.name) ?? 0;
+    if (count <= 1) {
+      stackTagCounts.delete(popped.name);
+    } else {
+      stackTagCounts.set(popped.name, count - 1);
+    }
+  };
   let i = from;
   while (i < html.length && nsStack.length > 0) {
     if (html.charCodeAt(i) !== 60 /* < */) {
@@ -611,12 +622,12 @@ function skipForeignContent(html: string, lowerHtml: string, rootName: string, f
     if (open[1]) {
       // Unwind to the matching open element, frame 0 included: an end tag that
       // matches the root closes the subtree.
-      let matched = false;
-      for (let frame = nsStack.length - 1; frame >= 0; frame -= 1) {
-        if (nsStack[frame]?.name === tagName) {
-          nsStack.length = frame;
-          matched = true;
-          break;
+      const matched = (stackTagCounts.get(tagName) ?? 0) > 0;
+      if (matched) {
+        while (nsStack.length > 0) {
+          const top = nsStack[nsStack.length - 1]!;
+          popFrame();
+          if (top.name === tagName) break;
         }
       }
       // An end tag that matches nothing is walked down to the first
@@ -637,7 +648,7 @@ function skipForeignContent(html: string, lowerHtml: string, rootName: string, f
       // so the scan does not consume it — it only leaves foreign content and
       // lets the next pass read the same tag under HTML rules.
       while (nsStack.length > 0 && nsStack[nsStack.length - 1]!.childNs !== 'html') {
-        nsStack.pop();
+        popFrame();
       }
       if (nsStack.length === 0) return i;
       continue;
@@ -671,6 +682,7 @@ function skipForeignContent(html: string, lowerHtml: string, rootName: string, f
         childNs: foreignChildNamespace(tagName, elementNs, tag.attrs),
         mathmlText: elementNs === 'math' && MATHML_TEXT_INTEGRATION_POINTS.includes(tagName),
       });
+      stackTagCounts.set(tagName, (stackTagCounts.get(tagName) ?? 0) + 1);
     }
     i = tagEnd + 1;
   }

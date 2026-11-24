@@ -184,7 +184,7 @@ describe('od lint CLI entrypoint', () => {
     const before = stub.requests.length;
     const run = await runCli(['lint', cleanFile, '--daemon-url', stub.baseUrl]);
     expect(run.code).toBe(0);
-    expect(run.stdout).toContain('clean — 0 findings');
+    expect(run.stdout).toContain('clean — 0 findings (P0 0 · P1 0 · P2 0 · a11y: wcag22-aa)');
     const req = stub.requests[before];
     expect(req?.method).toBe('POST');
     expect(req?.url).toBe('/api/artifacts/lint');
@@ -244,6 +244,8 @@ describe('od lint CLI entrypoint', () => {
     const envelope = JSON.parse(run.stdout);
     expect(envelope.ok).toBe(false);
     expect(envelope.failOn).toBe('p0');
+    expect(envelope.a11yLevel).toBe('wcag22-aa');
+    expect(JSON.parse(stub.requests.at(-1)?.body ?? '{}')).toEqual({ html: '<main><p>Hello</p></main>' });
     expect(envelope.counts).toEqual({ p0: 1, p1: 1, p2: 0 });
     expect(envelope.findings).toHaveLength(2);
     expect(envelope.agentMessage).toContain('<artifact-lint>');
@@ -260,9 +262,49 @@ describe('od lint CLI entrypoint', () => {
     expect(withoutFlag.stdout).not.toContain('<artifact-lint>');
   });
 
-  it('exits 2 on usage errors: unknown flag, bad --fail-on, missing file, empty input', async () => {
+  it('forwards --a11y-level in the request and reports it in the JSON envelope', async () => {
+    stub.setResponder(() => ({
+      status: 200,
+      body: { findings: [], agentMessage: '', a11yLevel: 'wcag22-aaa' },
+    }));
+    const before = stub.requests.length;
+    const run = await runCli([
+      'lint',
+      cleanFile,
+      '--a11y-level',
+      'wcag22-aaa',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+    expect(run.code).toBe(0);
+    expect(JSON.parse(stub.requests[before]?.body ?? '{}')).toEqual({
+      html: '<main><p>Hello</p></main>',
+      a11yLevel: 'wcag22-aaa',
+    });
+    expect(JSON.parse(run.stdout)).toMatchObject({ ok: true, a11yLevel: 'wcag22-aaa' });
+
+    const beforeFirstRun = await runCli([
+      'lint',
+      '--a11y-level',
+      'wcag-a',
+      cleanFile,
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+    expect(beforeFirstRun.code).toBe(0);
+    expect(JSON.parse(stub.requests.at(-1)?.body ?? '{}')).toEqual({
+      html: '<main><p>Hello</p></main>',
+      a11yLevel: 'wcag-a',
+    });
+    expect(JSON.parse(beforeFirstRun.stdout)).toMatchObject({ ok: true, a11yLevel: 'wcag22-aaa' });
+  });
+
+  it('exits 2 on usage errors: unknown flag, bad --fail-on, bad --a11y-level, missing file, empty input', async () => {
     expect((await runCli(['lint', cleanFile, '--bogus', '--daemon-url', stub.baseUrl])).code).toBe(2);
     expect((await runCli(['lint', cleanFile, '--fail-on', 'p9', '--daemon-url', stub.baseUrl])).code).toBe(2);
+    expect((await runCli(['lint', cleanFile, '--a11y-level', 'bogus', '--daemon-url', stub.baseUrl])).code).toBe(2);
     expect((await runCli(['lint'])).code).toBe(2);
     const missing = await runCli(['lint', join(fixtureDir, 'nope.html'), '--daemon-url', stub.baseUrl]);
     expect(missing.code).toBe(2);
@@ -287,13 +329,16 @@ describe('od lint CLI entrypoint', () => {
     expect(run.code).toBe(3);
   });
 
-  it('fails `--json --fail-on p0` on the low-contrast fixture with the real linter', async () => {
+  it('fails `--json --fail-on p0` on the low-contrast fixture and respects `--a11y-level wcag-a`', async () => {
     // The stub answers with the daemon's own linter, so this exercises the
-    // real low-contrast-text rule end to end through the CLI envelope.
+    // real low-contrast-text rule and compliance tier switching end to end.
     stub.setResponder((req) => {
-      const { html } = JSON.parse(req.body) as { html: string };
-      const findings = lintArtifact(html);
-      return { status: 200, body: { findings, agentMessage: renderFindingsForAgent(findings) } };
+      const { html, a11yLevel } = JSON.parse(req.body) as { html: string; a11yLevel?: any };
+      const findings = lintArtifact(html, { a11yLevel });
+      return {
+        status: 200,
+        body: { findings, agentMessage: renderFindingsForAgent(findings), a11yLevel: a11yLevel ?? 'wcag22-aa' },
+      };
     });
     const fixture = join(__dirname, 'fixtures', 'a11y', 'low-contrast.html');
     expect(readFileSync(fixture, 'utf8')).toContain('#a3a3a3');
@@ -301,13 +346,232 @@ describe('od lint CLI entrypoint', () => {
     expect(run.code).toBe(1);
     const envelope = JSON.parse(run.stdout);
     expect(envelope.ok).toBe(false);
+    expect(envelope.a11yLevel).toBe('wcag22-aa');
     expect(envelope.counts.p0).toBeGreaterThanOrEqual(1);
     expect(envelope.findings).toContainEqual(expect.objectContaining({ id: 'low-contrast-text', severity: 'P0' }));
+
+    const levelARun = await runCli([
+      'lint',
+      fixture,
+      '--a11y-level',
+      'wcag-a',
+      '--json',
+      '--fail-on',
+      'p0',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+    expect(levelARun.code).toBe(0);
+    expect(JSON.parse(levelARun.stdout)).toMatchObject({
+      ok: true,
+      a11yLevel: 'wcag-a',
+      counts: { p0: 0 },
+    });
   });
 
-  it('is discoverable from the root help output', async () => {
+  it('is discoverable from the root help output and lint --help', async () => {
     const run = await runCli(['--help']);
     expect(run.stdout).toContain('od lint <file.html|->');
     expect(run.stdout).toContain('--fail-on');
+    expect(run.stdout).toContain('--a11y-level <tier>');
+
+    const lintHelp = await runCli(['lint', '--help']);
+    expect(lintHelp.code).toBe(0);
+    expect(lintHelp.stdout).toContain('--a11y-level <tier>');
+    expect(lintHelp.stdout).toContain('wcag22-aa');
+  });
+
+  it('prints compliance provenance without double parens and discloses active a11yLevel in plain text and JSON', async () => {
+    stub.setResponder(() => ({
+      status: 200,
+      body: {
+        findings: [
+          {
+            severity: 'P0',
+            id: 'missing-accessible-name',
+            message: '1 interactive element(s) without an accessible name; first: <button> has no text or label.',
+            fix: 'Add visible text or aria-label.',
+            snippet: '<button></button>',
+            compliance: { standard: 'WCAG-2.2', sc: '4.1.2', level: 'A' },
+          },
+        ],
+        agentMessage: '<artifact-lint>block</artifact-lint>',
+        a11yLevel: 'wcag21-aa',
+      },
+    }));
+    const before = stub.requests.length;
+    const plain = await runCli(['lint', cleanFile, '--daemon-url', stub.baseUrl]);
+    expect(plain.code).toBe(1);
+    expect(JSON.parse(stub.requests[before]?.body ?? '{}')).toEqual({ html: '<main><p>Hello</p></main>' });
+    expect(plain.stdout).toContain('[P0] missing-accessible-name [WCAG 2.2 SC 4.1.2, A] — 1 interactive element(s)');
+    expect(plain.stdout).not.toContain('((');
+    expect(plain.stdout).toContain('1 finding (P0 1 · P1 0 · P2 0 · a11y: wcag21-aa)');
+
+    const jsonOmit = await runCli(['lint', cleanFile, '--json', '--daemon-url', stub.baseUrl]);
+    expect(jsonOmit.code).toBe(1);
+    expect(JSON.parse(jsonOmit.stdout)).toMatchObject({ a11yLevel: 'wcag21-aa' });
+
+    stub.setResponder(() => ({ status: 200, body: { findings: [], agentMessage: '' } }));
+    const cleanEq = await runCli(['lint', cleanFile, '--a11y-level=off', '--daemon-url', stub.baseUrl]);
+    expect(cleanEq.code).toBe(0);
+    expect(cleanEq.stdout).toContain('clean — 0 findings (P0 0 · P1 0 · P2 0 · a11y: off)');
+  });
+
+  it('rejects empty/bad --fail-on and --a11y-level with fixed non-echoing stderr and handles HTTP 400', async () => {
+    for (const badFailOn of ['', 'p9', 'bad\u001b[31m\n']) {
+      const res = await runCli(['lint', cleanFile, '--fail-on', badFailOn, '--daemon-url', stub.baseUrl]);
+      expect(res.code).toBe(2);
+      expect(res.stderr).toContain('invalid --fail-on (expected p0 | p1 | p2 | none)');
+      expect(res.stderr).not.toContain('p9');
+      expect(res.stderr).not.toContain('bad');
+      expect(res.stderr).not.toContain('\u001b');
+    }
+
+    for (const badLevel of ['', 'bogus', 'bad\u001b[31m\n']) {
+      const res = await runCli(['lint', cleanFile, '--a11y-level', badLevel, '--daemon-url', stub.baseUrl]);
+      expect(res.code).toBe(2);
+      expect(res.stderr).toContain('invalid --a11y-level (expected');
+      expect(res.stderr).not.toContain('bogus');
+      expect(res.stderr).not.toContain('bad');
+      expect(res.stderr).not.toContain('\u001b');
+    }
+    const danglingFlag = await runCli(['lint', cleanFile, '--daemon-url', stub.baseUrl, '--a11y-level']);
+    expect(danglingFlag.code).toBe(2);
+    expect(danglingFlag.stderr).toContain('flag --a11y-level requires a value');
+
+    stub.setResponder(() => ({
+      status: 200,
+      body: { findings: [P0_FINDING], agentMessage: '', a11yLevel: 'wcag-a' },
+    }));
+    const runNone = await runCli([
+      'lint',
+      cleanFile,
+      '--a11y-level',
+      'wcag-a',
+      '--fail-on',
+      'none',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+    expect(runNone.code).toBe(0);
+    expect(JSON.parse(runNone.stdout)).toMatchObject({ ok: true, failOn: 'none', a11yLevel: 'wcag-a' });
+
+    stub.setResponder(() => ({
+      status: 400,
+      body: { error: 'invalid a11yLevel (expected wcag-a | wcag20-aa | wcag21-aa | wcag22-aa | wcag22-aaa | off)' },
+    }));
+    const http400 = await runCli(['lint', cleanFile, '--daemon-url', stub.baseUrl]);
+    expect(http400.code).toBe(64);
+    expect(`${http400.stdout}${http400.stderr}`).toContain('invalid a11yLevel');
+  });
+
+  it('exercises all 5 WCAG 2.2 rules end-to-end via real lintArtifact and renderFindingsForAgent across tiers and flags', async () => {
+    stub.setResponder((req) => {
+      const { html, a11yLevel } = JSON.parse(req.body) as { html: string; a11yLevel?: any };
+      const resolvedTier = a11yLevel ?? 'wcag22-aa';
+      const findings = lintArtifact(html, { a11yLevel: resolvedTier });
+      return {
+        status: 200,
+        body: { findings, agentMessage: renderFindingsForAgent(findings), a11yLevel: resolvedTier },
+      };
+    });
+
+    const wcag22File = join(fixtureDir, 'wcag22-all.html');
+    writeFileSync(
+      wcag22File,
+      [
+        '<!doctype html>',
+        '<html>',
+        '<head>',
+        '<style>',
+        'body { background: #ffffff; }',
+        'button:focus { outline: none; }',
+        'a:focus { outline: 1px solid #999999; }',
+        '</style>',
+        '</head>',
+        '<body><main><img src="hero.png"><button>Go</button><a href="/more">More</a></main></body>',
+        '</html>',
+      ].join(''),
+    );
+
+    const levelAJson = await runCli([
+      'lint',
+      wcag22File,
+      '--a11y-level',
+      'wcag-a',
+      '--fail-on',
+      'p0',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+    expect(levelAJson.code).toBe(1);
+    const levelAEnv = JSON.parse(levelAJson.stdout);
+    expect(levelAEnv.a11yLevel).toBe('wcag-a');
+    expect(levelAEnv.findings.map((f: { id: string }) => f.id)).toEqual([
+      'missing-img-alt',
+      'missing-page-title',
+      'missing-html-lang',
+    ]);
+
+    const levelAImgOnlyP1File = join(fixtureDir, 'title-lang-only.html');
+    writeFileSync(levelAImgOnlyP1File, '<!doctype html><html><head></head><body><main><p>Hi</p></main></body></html>');
+    const p1PassOnP0 = await runCli([
+      'lint',
+      levelAImgOnlyP1File,
+      '--a11y-level',
+      'wcag-a',
+      '--fail-on',
+      'p0',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+    expect(p1PassOnP0.code).toBe(0);
+    const p1FailOnP1 = await runCli([
+      'lint',
+      levelAImgOnlyP1File,
+      '--a11y-level',
+      'wcag-a',
+      '--fail-on',
+      'p1',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+    expect(p1FailOnP1.code).toBe(1);
+
+    const aaAgent = await runCli([
+      'lint',
+      wcag22File,
+      '--a11y-level',
+      'wcag22-aa',
+      '--agent-message',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+    expect(aaAgent.code).toBe(1);
+    expect(aaAgent.stdout).toContain('[P0] missing-img-alt [WCAG 2.2 SC 1.1.1, A]');
+    expect(aaAgent.stdout).toContain('[P1] missing-page-title [WCAG 2.2 SC 2.4.2, A]');
+    expect(aaAgent.stdout).toContain('[P1] missing-html-lang [WCAG 2.2 SC 3.1.1, A]');
+    expect(aaAgent.stdout).toContain('[P0] focus-outline-suppressed [WCAG 2.2 SC 2.4.7, AA]');
+    expect(aaAgent.stdout).not.toContain('low-focus-appearance');
+    expect(aaAgent.stdout).toContain('**[P0] focus-outline-suppressed** [WCAG 2.2 SC 2.4.7, AA]');
+
+    const aaaAgent = await runCli([
+      'lint',
+      wcag22File,
+      '--a11y-level',
+      'wcag22-aaa',
+      '--fail-on',
+      'p1',
+      '--agent-message',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+    expect(aaaAgent.code).toBe(1);
+    expect(aaaAgent.stdout).toContain('[P1] low-focus-appearance [WCAG 2.2 SC 2.4.13, AAA]');
+    expect(aaaAgent.stdout).toContain('**[P1] low-focus-appearance** [WCAG 2.2 SC 2.4.13, AAA]');
   });
 });
