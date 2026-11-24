@@ -126,13 +126,13 @@ describe('contrast-unresolved', () => {
 });
 
 describe('low-contrast-ui (SC 1.4.11)', () => {
-  it('fires P0 when a control boundary is below 3:1 against the page', () => {
+  it('fires P1 when a control boundary is below 3:1 against the page', () => {
     const html = `<style>
       body { background: #ffffff; }
       input { border: 1px solid #dddddd; background: #ffffff; }
     </style><label>Email <input type="email"></label>`;
     const hit = finding(lintArtifact(html), 'low-contrast-ui');
-    expect(hit.severity).toBe('P0');
+    expect(hit.severity).toBe('P1');
     expect(hit.message).toContain('3:1');
   });
 
@@ -234,7 +234,7 @@ describe('low-contrast-ui (SC 1.4.11)', () => {
   it('composites translucent rgba() borders against the opaque page backdrop', () => {
     const low = `<style>body { background: #ffffff; } input { border: 1px solid rgba(0, 0, 0, 0.08); background: #ffffff; }</style>`;
     const lowFindings = lintArtifact(low);
-    expect(finding(lowFindings, 'low-contrast-ui').severity).toBe('P0');
+    expect(finding(lowFindings, 'low-contrast-ui').severity).toBe('P1');
     expect(ids(lowFindings)).not.toContain('contrast-unresolved');
 
     const ok = `<style>body { background: #ffffff; } input { border: 1px solid rgba(0, 0, 0, 0.55); background: #ffffff; }</style>`;
@@ -424,14 +424,14 @@ describe('declarative compliance profiles', () => {
       a11yLevel: 'wcag22-aa',
       a11yProfile: {
         uiContrast: {
-          severity: 'P1',
+          severity: 'P0',
           minRatio: 3,
           compliance: { standard: 'WCAG-2.2', sc: '1.4.11', level: 'AA' },
         },
         targetSize: null,
       },
     });
-    expect(finding(found, 'low-contrast-ui').severity).toBe('P1');
+    expect(finding(found, 'low-contrast-ui').severity).toBe('P0');
     expect(ids(found)).not.toContain('target-size-min');
   });
 

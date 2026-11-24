@@ -207,7 +207,7 @@ describe('artifact lint a11y compliance profiles', () => {
           compliance: { standard: 'WCAG-2.1', sc: '1.4.3', level: 'AA' },
         },
         uiContrast: {
-          severity: 'P0',
+          severity: 'P1',
           minRatio: 3,
           compliance: { standard: 'WCAG-2.1', sc: '1.4.11', level: 'AA' },
         },
@@ -245,7 +245,7 @@ describe('artifact lint a11y compliance profiles', () => {
           compliance: { standard: 'WCAG-2.2', sc: '1.4.3', level: 'AA' },
         },
         uiContrast: {
-          severity: 'P0',
+          severity: 'P1',
           minRatio: 3,
           compliance: { standard: 'WCAG-2.2', sc: '1.4.11', level: 'AA' },
         },
@@ -287,7 +287,7 @@ describe('artifact lint a11y compliance profiles', () => {
           compliance: { standard: 'WCAG-2.2', sc: '1.4.6', level: 'AAA' },
         },
         uiContrast: {
-          severity: 'P0',
+          severity: 'P1',
           minRatio: 3,
           compliance: { standard: 'WCAG-2.2', sc: '1.4.11', level: 'AA' },
         },

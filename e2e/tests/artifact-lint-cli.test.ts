@@ -98,7 +98,7 @@ describe('artifact lint CLI end-to-end', () => {
       expect(controlReport.ok).toBe(false);
       expect(controlReport.findings).toContainEqual(expect.objectContaining({
         id: 'low-contrast-ui',
-        severity: 'P0',
+        severity: 'P1',
       }));
       expect(controlReport.findings).toContainEqual(expect.objectContaining({
         id: 'missing-accessible-name',

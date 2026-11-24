@@ -330,7 +330,7 @@ const WCAG_20_AA_PROFILE = withStandard(
 const WCAG_21_AA_PROFILE = withStandard(
   extendProfile(WCAG_20_AA_PROFILE, 'wcag21-aa', 'WCAG 2.1 Level AA', {
     uiContrast: {
-      severity: 'P0',
+      severity: 'P1',
       minRatio: 3,
       compliance: { standard: 'WCAG-2.1', sc: '1.4.11', level: 'AA' },
     },

@@ -215,10 +215,11 @@ Baseline authoring expectations and static enforcement follow the [W3C WCAG 2.2 
   unrecognized/non-object inputs). CLI plain-text output and `<artifact-lint>`
   agent blocks render `[WCAG X.Y SC Z, Level]`, and CLI `--json` / HTTP `/lint`
   and `/save` responses disclose the active `a11yLevel`.
-- `low-contrast-ui` remains P0 under WCAG 2.1/2.2 AA and AAA presets (`wcag20-aa`
-  omits `uiContrast` by default); decorative hairline `--border` tokens used for
-  cards and dividers typically sit below 3:1, so form controls (`input`,
-  `select`, `textarea`) should bind a ≥ 3:1 high-contrast token (such as
+- `low-contrast-ui` defaults to P1 under WCAG 2.1/2.2 AA and AAA presets (`wcag20-aa`
+  omits `uiContrast` by default) so existing decorative hairline `--border` tokens
+  used for cards and dividers surface as non-blocking warnings until upgraded (callers
+  can promote `uiContrast` to `P0` via `a11yProfile` overrides). For compliant form
+  controls (`input`, `select`, `textarea`), bind a ≥ 3:1 high-contrast token (such as
   `--muted`, `--fg-2`, or `--fg`), an explicit ≥ 3:1 control border colour, a
   crisp outer ring `box-shadow`, or a ≥ 3:1 fill rather than reusing a hairline
   `--border` token.
@@ -228,7 +229,7 @@ Baseline authoring expectations and static enforcement follow the [W3C WCAG 2.2 
 | Rule ID | Slot | Active Tiers | Severity | Thresholds | W3C WCAG 2.2 Anchor | Static Coverage & Limits |
 |---|---|---|---|---|---|---|
 | `low-contrast-text` | `textContrast` | `wcag20-aa`..`wcag22-aaa` | P0 | `4.5:1` / `3:1` AA; `7:1` / `4.5:1` AAA (`24px`, bold `18.66px`) | [SC 1.4.3](https://www.w3.org/TR/WCAG22/#contrast-minimum) / [SC 1.4.6](https://www.w3.org/TR/WCAG22/#contrast-enhanced) | Evaluates rules pairing foreground `color` and an opaque background across theme scopes; inherited single-sided rules are skipped. |
-| `low-contrast-ui` | `uiContrast` | `wcag21-aa`..`wcag22-aaa` | P0 | `3:1` vs page backdrop | [SC 1.4.11](https://www.w3.org/TR/WCAG22/#non-text-contrast) | Evaluates boundary form controls (`input` except hidden/button/submit/reset/image, `select`, `textarea`, checkbox/switch/radio/textbox/combobox/slider roles) over `pageBackdrop`. |
+| `low-contrast-ui` | `uiContrast` | `wcag21-aa`..`wcag22-aaa` | P1 | `3:1` vs page backdrop | [SC 1.4.11](https://www.w3.org/TR/WCAG22/#non-text-contrast) | Evaluates boundary form controls (`input` except hidden/button/submit/reset/image, `select`, `textarea`, checkbox/switch/radio/textbox/combobox/slider roles) over `pageBackdrop`. |
 | `missing-accessible-name` | `accessibleName` | `wcag-a`..`wcag22-aaa` | P0 | Non-empty name | [SC 4.1.2](https://www.w3.org/TR/WCAG22/#name-role-value) | Linearly scans buttons, links (`href`), 8 ARIA widget roles (`button`, `link`, `checkbox`, `switch`, `tab`, `menuitem`, `radio`, `option` — excluding `textbox`, `combobox`, and `slider`), and native form fields (`input` except hidden/submit/reset/button-with-value/image-with-alt, `select`, `textarea`) for text, `<img alt>`, `aria-label`, resolvable `aria-labelledby`, `title`, or `<label>`. |
 | `target-size-min` | `targetSize` | `wcag22-aa`..`wcag22-aaa` | P1 | `24×24` CSS px AA; `44×44` CSS px AAA | [SC 2.5.8](https://www.w3.org/TR/WCAG22/#target-size-minimum) / [SC 2.5.5](https://www.w3.org/TR/WCAG22/#target-size-enhanced) | Checks static `width`/`height` + `min-*` (`px`/`rem`/`pt`); skips pseudo-elements; cannot compute rendered boxes or `2.5.8` spacing exceptions. |
 | `contrast-unresolved` | `unresolvedContrast` | `wcag20-aa`..`wcag22-aaa` | P1 | — | — | Surfaces unresolvable `color-mix()`, `currentColor`, gradients, translucent backgrounds behind text, or undefined tokens so ambiguity never silently passes (`compliance` omitted). |
