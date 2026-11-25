@@ -281,7 +281,7 @@ def prepare_sync(
     fetch: bool = True,
     run_ci: bool = True,
     wait_ci: bool = False,
-    wait_timeout_s: int = 2400,
+    wait_timeout_s: int = 5400,
     profile: str = "upstream-sync",
 ) -> dict[str, Any]:
     """Create an isolated sync branch in a temp worktree and optionally hand off to Local CI."""

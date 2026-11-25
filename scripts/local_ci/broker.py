@@ -999,7 +999,7 @@ def execute_worker(repo: Path, run_id: str) -> int:
 
         if needs_node:
             rc_inst, out_inst, to_inst = run_with_process_group(
-                ["bash", "-lc", "pnpm install --offline --frozen-lockfile --ignore-scripts && OD_POSTINSTALL_INTENT=workspace pnpm bootstrap"],
+                ["bash", "-lc", "OD_POSTINSTALL_INTENT=workspace pnpm install --offline --frozen-lockfile"],
                 cwd=wt_dir,
                 env=env,
                 timeout_s=600,

@@ -314,7 +314,7 @@ def build_parser() -> argparse.ArgumentParser:
     up_sync.add_argument("--no-fetch", action="store_true")
     up_sync.add_argument("--no-ci", action="store_true")
     up_sync.add_argument("--wait", action="store_true")
-    up_sync.add_argument("--wait-timeout", type=int, default=2400)
+    up_sync.add_argument("--wait-timeout", type=int, default=5400)
     up_sync.add_argument("--profile", choices=broker.PROFILES, default="upstream-sync")
 
     audit = sub.add_parser("daily-audit", help="Run read-only upstream drift + SBOM-CVE/KEV audit")
