@@ -451,3 +451,17 @@ describe("upstream drift and conflict prediction", () => {
     expect(git(forkRepo, ["status", "--short"])).toBe("");
   });
 });
+
+describe("daily-audit and fail-closed CLI flags", () => {
+  test("parses upstream-sync --wait-timeout and fails closed on daily-audit without provider", () => {
+    const helpRes = runPython([LOCAL_VERIFY, "upstream-sync", "--help"]);
+    expect(helpRes.status).toBe(0);
+    expect(helpRes.stdout).toContain("--wait-timeout");
+
+    const auditRes = runPython([LOCAL_VERIFY, "--repo", REPO_ROOT, "daily-audit", "--no-fetch", "--format", "json"], {
+      env: { ...process.env, ACLAB_SECURITY_DATA_PROVIDER_ROOT: "/nonexistent-provider-root-test" },
+    });
+    expect(auditRes.status).not.toBe(0);
+    expect(auditRes.stdout).toMatch(/PROVIDER|PODMAN/);
+  });
+});

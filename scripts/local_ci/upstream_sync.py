@@ -281,6 +281,7 @@ def prepare_sync(
     fetch: bool = True,
     run_ci: bool = True,
     wait_ci: bool = False,
+    wait_timeout_s: int = 2400,
     profile: str = "upstream-sync",
 ) -> dict[str, Any]:
     """Create an isolated sync branch in a temp worktree and optionally hand off to Local CI."""
@@ -392,11 +393,16 @@ def prepare_sync(
             allow_upstream_cve_drift=True,
         )
         if wait_ci:
-            ci_submission = wait_run(repo, ci_submission["run_id"])
+            ci_submission = wait_run(repo, ci_submission["run_id"], timeout_s=wait_timeout_s)
+
+    ci_failed = wait_ci and ci_submission is not None and ci_submission.get("status") != "pass"
+    receipt_status = "ci_failed" if ci_failed else "ready_for_review"
+    exit_code = 1 if ci_failed else 0
 
     receipt = {
         "schema": UPSTREAM_SYNC_RECEIPT_SCHEMA,
-        "status": "ready_for_review",
+        "status": receipt_status,
+        "exit_code": exit_code,
         "strategy": strategy,
         "base_oid": base_oid,
         "upstream_oid": upstream_oid,

@@ -11,6 +11,7 @@ from pathlib import Path
 import py_compile
 import subprocess
 import sys
+import time
 from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -23,12 +24,14 @@ from local_ci.common import (
     DEFAULT_SECURITY_DOCTOR_SCRIPT,
     DEFAULT_VALIDATE_PLAN_SCRIPT,
     LocalCiError,
+    atomic_write_json,
     ensure_rootless_podman,
     inspect_local_image_id,
     pinned_scanner_image,
     repo_root,
     resolve_tool_script,
     resolved_node24_bin,
+    run_id_nonce,
     runtime_dir,
 )
 
@@ -195,6 +198,70 @@ def cmd_install_hooks(repo: Path) -> int:
     return 0
 
 
+def cmd_daily_audit(repo: Path, *, no_fetch: bool = False, fmt: str = "text") -> int:
+    """Read-only daily T3 audit: check official upstream drift + SBOM/CVE/KEV correlation."""
+    up = upstream_sync.check_upstream(repo, fetch=not no_fetch, fork_ref="HEAD")
+    sbom = sbom_kev_gate.run_sbom_kev(repo, mode="revision", revision="HEAD")
+    corr = sbom.get("correlation_summary") or {}
+    kev_listed = int(corr.get("kev_listed", 0))
+    cve_candidates = int(corr.get("cve_candidates", 0))
+    upstream_status = str(up.get("status", "unknown"))
+    alert = (
+        kev_listed > 0
+        or upstream_status == "conflict_manual_resolution_required"
+        or sbom.get("status") != "pass"
+    )
+    recorded_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    audit_dir = runtime_dir(repo) / "daily-audit"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    receipt_path = audit_dir / f"{run_id_nonce('daily-audit')}.json"
+    latest_path = audit_dir / "latest.json"
+
+    report = {
+        "schema": "open-design-daily-audit/v1",
+        "status": "alert" if alert else "ok",
+        "alert": alert,
+        "head_oid": up.get("fork_oid"),
+        "upstream": {
+            "status": upstream_status,
+            "upstream_oid": up.get("upstream_oid"),
+            "behind_commits": up.get("upstream_behind_commits"),
+            "ahead_commits": up.get("fork_ahead_commits"),
+            "overlapping_files": up.get("overlapping_files"),
+            "merge_clean": (up.get("merge_forecast") or {}).get("merge_clean"),
+        },
+        "sbom_kev": {
+            "status": sbom.get("status"),
+            "component_count": sbom.get("component_count"),
+            "vulnerability_count": sbom.get("vulnerability_count"),
+            "cve_candidates": cve_candidates,
+            "kev_listed": kev_listed,
+            "severity_counts": sbom.get("severity_counts"),
+            "receipt_path": sbom.get("receipt_path"),
+        },
+        "recorded_at": recorded_at,
+        "receipt_path": str(receipt_path),
+    }
+    atomic_write_json(receipt_path, report)
+    atomic_write_json(latest_path, report)
+
+    if fmt == "json":
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        head_short = str(up.get("fork_oid", ""))[:9]
+        merge_clean = (up.get("merge_forecast") or {}).get("merge_clean")
+        overlaps = len(up.get("overlapping_files") or [])
+        sev = sbom.get("severity_counts") or {}
+        label = "ALERT" if alert else "OK"
+        print(
+            f"[{recorded_at}] {label} head={head_short} upstream={upstream_status} "
+            f"behind={up.get('upstream_behind_commits')} overlaps={overlaps} merge_clean={merge_clean} "
+            f"sbom_vuln={sbom.get('vulnerability_count')} crit={sev.get('CRITICAL', 0)} high={sev.get('HIGH', 0)} "
+            f"cve={cve_candidates} kev={kev_listed} receipt={receipt_path}"
+        )
+    return 2 if alert else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, help="Repository root override (default: detected git root)")
@@ -247,7 +314,12 @@ def build_parser() -> argparse.ArgumentParser:
     up_sync.add_argument("--no-fetch", action="store_true")
     up_sync.add_argument("--no-ci", action="store_true")
     up_sync.add_argument("--wait", action="store_true")
+    up_sync.add_argument("--wait-timeout", type=int, default=2400)
     up_sync.add_argument("--profile", choices=broker.PROFILES, default="upstream-sync")
+
+    audit = sub.add_parser("daily-audit", help="Run read-only upstream drift + SBOM-CVE/KEV audit")
+    audit.add_argument("--no-fetch", action="store_true")
+    audit.add_argument("--format", choices=("text", "json"), default="text")
 
     sub.add_parser("doctor", help="Check local CI contracts, provider health, and container images")
     sub.add_parser("install-hooks", help="Enable .githooks via git config core.hooksPath")
@@ -336,10 +408,13 @@ def main(argv: list[str] | None = None) -> int:
                 fetch=not args.no_fetch,
                 run_ci=not args.no_ci,
                 wait_ci=args.wait,
+                wait_timeout_s=args.wait_timeout,
                 profile=args.profile,
             )
             print(json.dumps(res, indent=2, sort_keys=True))
-            return 0
+            return int(res.get("exit_code", 0))
+        if args.command == "daily-audit":
+            return cmd_daily_audit(repo, no_fetch=args.no_fetch, fmt=args.format)
         if args.command == "doctor":
             return cmd_doctor(repo)
         if args.command == "install-hooks":
