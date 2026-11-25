@@ -1,0 +1,47 @@
+{
+  "schema": "aclab-shared-security-scanner-data-consumer/v2",
+  "provider_adapter": "${ACLAB_SECURITY_DATA_PROVIDER_ROOT}/scripts/security_data_adapter.py",
+  "provider_mode": "adapter-required",
+  "required_feeds": [
+    "trivy",
+    "cve",
+    "kev"
+  ],
+  "offline_scan_entrypoints": {
+    "trivy": "python3 scripts/local-verify.py sbom-kev --mode revision --revision <exact-git-revision>"
+  },
+  "scanner_images": {
+    "trivy": "docker.io/aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
+    "gitleaks": "ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+    "playwright": "mcr.microsoft.com/playwright@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e"
+  },
+  "trivy_binding": {
+    "contract_schema": "aclab-security-data-contract/v2",
+    "contract_version": 2,
+    "semantic_algorithm": "python-ast-canonical-v1",
+    "semantic_sha256": "2bddeeb2f4dfd946cbb2504b6c06e7d87103bb4bf3306ad83cf782731f137d8e",
+    "release": {
+      "tag": "v3.0.6-security-data-contract",
+      "commit": "e1df415ad558e21c1275e74bbf92ff57abb136f5",
+      "manifest_sha256": "18cabc9ba0bfe719217558f408416c0886b810e255e4b3dc408d3881a317d11d",
+      "sources": {
+        "security_data_adapter.py": {
+          "git_blob_sha1": "2041bebbfaad90246d35d78761a2762dea70fc3a",
+          "sha256": "5d01f3ddab654527393eb71189d96365b5eac1b6e08391e8c0d1a4dc15daa4e3"
+        },
+        "security_data_cache.py": {
+          "git_blob_sha1": "ae63e21eb1ab9d7095115e942069d9715cfbb3cd",
+          "sha256": "d001747fe0057607376b6d25e59bfc29af3547cac0494812a5c41d1a5b59227e"
+        },
+        "security_data_contract.py": {
+          "git_blob_sha1": "14df04fc519f3f0c5807fee7a7b95c1632710102",
+          "sha256": "3809314acb590383871f068e10dbb3191743d30ef7fda78f711e20d1cf69af1f"
+        },
+        "security_data_binding_contract.py": {
+          "git_blob_sha1": "bd235c14f622a9c42527c2e1d0a07972474f798c",
+          "sha256": "47f3cc90e18b218ab07c6b481d0f7a51ff1e688f2d1ee068c1cc0125fa1daaa7"
+        }
+      }
+    }
+  }
+}

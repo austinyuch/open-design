@@ -1,0 +1,175 @@
+{
+  "schema": "tiered-ci-plan/v1",
+  "tiers": {
+    "T0": {
+      "pre_commit": {
+        "ref_binding": "staged-index",
+        "checks": [
+          "gitleaks-staged",
+          "python-syntax-staged",
+          "agents-contract-json"
+        ]
+      },
+      "pre_push": {
+        "ref_binding": "pushed-ref-range",
+        "checks": [
+          "gitleaks-pushed-range",
+          "no-tracked-tmp-ci",
+          "scopes-preview"
+        ]
+      },
+      "offline_hermetic": true,
+      "llm_or_network_calls": false,
+      "claim_as_measured_slo": false
+    },
+    "T1": {
+      "sync_corpus_replay_max_seconds": 30,
+      "substituted_by_t3_background": false,
+      "claim_as_measured_slo": false
+    },
+    "T2": {
+      "sync_corpus_replay_max_seconds": 60,
+      "substituted_by_t3_background": false,
+      "trigger_or_receipt_present": true,
+      "protected_branch_fallback": "block",
+      "claim_as_measured_slo": false
+    },
+    "T3": {
+      "bound_to_candidate_identity": true,
+      "claim_as_measured_slo": false
+    }
+  },
+  "candidate": {
+    "base_oid": "8d69f08fbe23b5a3eb7daafe05823cad8da561e3",
+    "tree_oid": "2eb4ff0e8001a20b10aa963b76a421d418013e44",
+    "policy_digest": "8bd765deee1ff54eebf2bc0cc4c32875e54636290b5eac2177ffa7f012579309",
+    "lockfile_digest": "560f699f0c49a5c5574d7af2a0e49de7db68c6e64ef6a5b3025643055b9d58d6"
+  },
+  "receipt": {
+    "last_exit_code_only": false,
+    "tree_oid": "2eb4ff0e8001a20b10aa963b76a421d418013e44",
+    "base_oid": "8d69f08fbe23b5a3eb7daafe05823cad8da561e3",
+    "policy_digest": "8bd765deee1ff54eebf2bc0cc4c32875e54636290b5eac2177ffa7f012579309",
+    "lockfile_digest": "560f699f0c49a5c5574d7af2a0e49de7db68c6e64ef6a5b3025643055b9d58d6",
+    "output_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "content_hashing": {
+      "batched_vcs_object_lookup": true,
+      "lookup_mechanism": "git cat-file --batch-check",
+      "single_compute_precomputed_cid": true,
+      "skips_redundant_full_tree_hash_on_selective": true,
+      "bound_to_tree_oid": true,
+      "bound_tree_oid": "2eb4ff0e8001a20b10aa963b76a421d418013e44",
+      "per_file_subprocess_spawn": false,
+      "reuses_precomputed_cid_across_mutated_tree": false,
+      "converts_reuse_to_release_approval": false
+    },
+    "vcs_metadata_binding": {
+      "preserves_tree_only_groups": true,
+      "preserves_strict_full_mode": true,
+      "weakens_full_gate": false,
+      "converts_reuse_to_release_approval": false,
+      "inspects_vcs_metadata": true,
+      "composite_key_fields": [
+        "HEAD",
+        "ref_or_detached",
+        "sorted_exact_tags"
+      ],
+      "head_oid": "8d69f08fbe23b5a3eb7daafe05823cad8da561e3",
+      "ref_or_detached": "refs/heads/main",
+      "sorted_exact_tags": []
+    }
+  },
+  "workers": [],
+  "blast_radius": {
+    "has_rename_or_delete": false,
+    "unknown_dependency_edge": false,
+    "schema_or_toolchain_changed": false,
+    "fallback_scope": "full",
+    "selected_targets": 1,
+    "claim_pass_on_empty": false,
+    "script_io_closure": {
+      "caches_static_ast_import_graph": true,
+      "header_annotation_syntax": "# localci:reads <paths|none>",
+      "weakens_deleted_file_gate": false,
+      "weakens_dynamic_import_gate": false,
+      "weakens_strict_full_gate": false,
+      "has_deleted_file": false,
+      "has_dynamic_import": false,
+      "has_unannotated_external_io": false,
+      "fallback_scope": "full"
+    },
+    "scope_classification": {
+      "separates_module_internal_from_repo_wide": true,
+      "read_manifest_audited": true,
+      "forbids_host_local_and_gitignored_paths": true,
+      "expands_module_blast_radius_for_unrelated_docs": false,
+      "excludes_passive_string_slice_fixtures": true,
+      "verified_no_filesystem_or_exec_calls": true,
+      "read_manifest_paths": [
+        ".agents/gitleaks-baseline.json",
+        ".agents/security-scanner-data.json",
+        ".agents/tiered-ci-plan.json",
+        ".github/config/scopes.json",
+        "pnpm-lock.yaml"
+      ]
+    }
+  },
+  "gates": [
+    {
+      "id": "gitleaks-secret-scan",
+      "mandatory": true,
+      "waived_for_budget": false,
+      "feature_toggle": null
+    },
+    {
+      "id": "sbom-cve-kev-correlation",
+      "mandatory": true,
+      "waived_for_budget": false,
+      "feature_toggle": null
+    },
+    {
+      "id": "pnpm-guard",
+      "mandatory": true,
+      "waived_for_budget": false,
+      "feature_toggle": null
+    },
+    {
+      "id": "pnpm-typecheck",
+      "mandatory": true,
+      "waived_for_budget": false,
+      "feature_toggle": null
+    },
+    {
+      "id": "pnpm-i18n-check",
+      "mandatory": true,
+      "waived_for_budget": false,
+      "feature_toggle": null
+    },
+    {
+      "id": "scopes-driven-tests",
+      "mandatory": true,
+      "waived_for_budget": false,
+      "feature_toggle": null
+    }
+  ],
+  "feature_toggles": [],
+  "mutation": {
+    "churn_x_fan_in_exempt": false,
+    "claim_mutation_adequate": false,
+    "high_risk": false
+  },
+  "slos": {
+    "claim_as_measured_slo": false
+  },
+  "concurrency_control": {
+    "disjoint_single_package_locks": true,
+    "max_heavy_workers": 2,
+    "load1_auto_worker_cap": {
+      "enabled": true,
+      "max_load1": 6.0,
+      "opt_out_toggle": "OPEN_DESIGN_LOCAL_CI_DISABLE_LOAD1_CAP",
+      "overrides_explicit_barrier_worker_flags": false,
+      "emits_load1_in_progress_heartbeats": true
+    }
+  }
+}

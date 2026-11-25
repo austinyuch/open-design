@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -eu
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+exec python3 -I "${REPO_ROOT}/scripts/local-verify.py" --repo "${REPO_ROOT}" t0-prepush
