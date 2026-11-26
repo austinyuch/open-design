@@ -141,7 +141,7 @@ def _validate_provider_and_sources(contract: Mapping[str, Any], provider_root: P
             raise LocalCiError(f"Missing source pin for {name}", code="INVALID_CONTRACT")
         if hashlib.sha256(raw_bytes).hexdigest() != pin.get("sha256") or git_blob_sha1(raw_bytes) != pin.get("git_blob_sha1"):
             raise LocalCiError(
-                f"Provider source '{name}' does not match tracked v3.0.6 pin in .agents/security-scanner-data.json",
+                f"Provider source '{name}' does not match tracked v3.0.10 pin in .agents/security-scanner-data.json",
                 code="PROVIDER_PIN_MISMATCH",
             )
     return adapter

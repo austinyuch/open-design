@@ -21,17 +21,17 @@
     "semantic_algorithm": "python-ast-canonical-v1",
     "semantic_sha256": "2bddeeb2f4dfd946cbb2504b6c06e7d87103bb4bf3306ad83cf782731f137d8e",
     "release": {
-      "tag": "v3.0.6-security-data-contract",
-      "commit": "e1df415ad558e21c1275e74bbf92ff57abb136f5",
-      "manifest_sha256": "18cabc9ba0bfe719217558f408416c0886b810e255e4b3dc408d3881a317d11d",
+      "tag": "v3.0.10-security-data-contract",
+      "commit": "d20bd21cdec56c674e2f44060bfdc9e3e607efcb",
+      "manifest_sha256": "bca036e55f4d3abb22f61069e7a858fc49f7866a85f74acf6b7dfc6d7f367ceb",
       "sources": {
         "security_data_adapter.py": {
           "git_blob_sha1": "2041bebbfaad90246d35d78761a2762dea70fc3a",
           "sha256": "5d01f3ddab654527393eb71189d96365b5eac1b6e08391e8c0d1a4dc15daa4e3"
         },
         "security_data_cache.py": {
-          "git_blob_sha1": "ae63e21eb1ab9d7095115e942069d9715cfbb3cd",
-          "sha256": "d001747fe0057607376b6d25e59bfc29af3547cac0494812a5c41d1a5b59227e"
+          "git_blob_sha1": "89f9d5bb378152fdc5621402e6b8ee59d1bf6690",
+          "sha256": "e3c57f1d89ca8c84cbe0bc5f03cde52148f5ca163b31e90cfb8b5559a0892674"
         },
         "security_data_contract.py": {
           "git_blob_sha1": "14df04fc519f3f0c5807fee7a7b95c1632710102",
